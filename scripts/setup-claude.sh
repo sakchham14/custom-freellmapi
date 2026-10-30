@@ -14,7 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/../lib/common.sh"
 
-USE_MEMORY="${USE_MEMORY:-1}"
+# Memory defaults to LOCAL (Claude Code's built-in auto memory + CLAUDE.md).
+# The shared-memory MCP server is opt-in via --shared-memory.
+USE_SHARED_MEMORY="${USE_SHARED_MEMORY:-0}"
 
 # --- Resolve the unified API key from the FreeLLMAPI DB -------------------
 log "Resolving unified API key from FreeLLMAPI ..."
@@ -37,10 +39,10 @@ SETTINGS_DIR="$HOME/.claude"
 SETTINGS_FILE="$SETTINGS_DIR/settings.json"
 mkdir -p "$SETTINGS_DIR"
 
-if [ "$USE_MEMORY" = "1" ]; then
+if [ "$USE_SHARED_MEMORY" = "1" ]; then
   cp "$REPO_ROOT/templates/settings.json" "$SETTINGS_FILE"
 else
-  cp "$REPO_ROOT/templates/settings-no-memory.json" "$SETTINGS_FILE"
+  cp "$REPO_ROOT/templates/settings-local-memory.json" "$SETTINGS_FILE"
 fi
 
 # Substitute the placeholder with the real key. Use | as the delimiter so a key
@@ -49,7 +51,7 @@ sed_inplace "s|FREELLMAPI_API_KEY_PLACEHOLDER|$UNIFIED_KEY|g" "$SETTINGS_FILE"
 
 # Substitute the memory home + node binary placeholders so the hooks and MCP
 # server resolve on the machine actually running the setup (macOS, Linux, WSL).
-if [ "$USE_MEMORY" = "1" ]; then
+if [ "$USE_SHARED_MEMORY" = "1" ]; then
   MEM_HOME="$HOME/.claude/mem"
   NODE_BIN="$(command -v node || echo node)"
   sed_inplace "s|FREELLMAPI_MEM_HOME_PLACEHOLDER|$MEM_HOME|g" "$SETTINGS_FILE"
@@ -67,4 +69,8 @@ mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
 chmod 600 "$SETTINGS_FILE"
 ok "Claude Code settings written to $SETTINGS_FILE"
 log "  ANTHROPIC_BASE_URL = http://localhost:80/v1"
-log "  shared-memory MCP  = $([ "$USE_MEMORY" = "1" ] && echo enabled || echo disabled)"
+if [ "$USE_SHARED_MEMORY" = "1" ]; then
+  log "  memory            = shared-memory MCP server"
+else
+  log "  memory            = local (Claude Code auto memory + CLAUDE.md)"
+fi

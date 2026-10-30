@@ -8,6 +8,10 @@ and a one-shot Claude Code configuration that points at the gateway — so you g
 a working local LLM proxy with token-saving compression and response caching
 already turned on.
 
+**Memory is local by default.** Claude Code's built-in auto memory and `CLAUDE.md`
+files live on your machine and never leave it. The gateway's own per-user request
+history is disabled, and the shared-memory MCP server is opt-in.
+
 ## What it does
 
 | Step | What happens |
@@ -15,8 +19,9 @@ already turned on.
 | 0. Dependencies | Installs Docker, Docker Compose, OpenSSL, jq, node, curl (macOS: Homebrew, Linux/WSL: apt). Idempotent — skips what's already there |
 | 1. Install | Pulls `ghcr.io/tashfeenahmed/freellmapi:latest`, generates an encryption key + `.env`, starts the container |
 | 2. nginx | Renders `nginx.conf` from the template (optional Basic Auth), starts the proxy on host port **80** → freellmapi:3001 |
-| 3. Claude Code | Reads the unified API key straight from the FreeLLMAPI settings table and writes `~/.claude/settings.json` — `ANTHROPIC_BASE_URL=http://localhost:80/v1`, `ANTHROPIC_AUTH_TOKEN=<key>`, auto-compact + gateway model discovery on |
+| 3. Claude Code | Reads the unified API key straight from the FreeLLMAPI settings table and writes `~/.claude/settings.json` — `ANTHROPIC_BASE_URL=http://localhost:80/v1`, `ANTHROPIC_AUTH_TOKEN=<key>`, auto-compact + gateway model discovery on, **local memory on** |
 | 4. Gateway config | Reapplies compression (`aggressive`, auto-trigger at 32k tokens) + response cache after every start — the upstream image resets these on pull |
+| 5. Analytics | Disables the gateway's per-user request history (`REQUEST_ANALYTICS_RETENTION_DAYS=0`, `REQUEST_ANALYTICS_MAX_ROWS=0`) |
 
 ## Quick start
 
@@ -58,8 +63,9 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ```bash
 ./scripts/run.sh                          # interactive: prompts for every option
 ./scripts/run.sh --quick                  # all defaults, no prompts
-./scripts/run.sh --quick --no-memory      # skip the shared-memory MCP server
-./scripts/run.sh --quick --local-only     # skip Claude login AND server-side memory
+./scripts/run.sh --quick --shared-memory  # also wire up the shared-memory MCP server
+./scripts/run.sh --quick --no-memory      # disable the shared-memory MCP server (default)
+./scripts/run.sh --quick --local-only     # skip Claude login and memory
 ./scripts/run.sh --quick --no-deps         # skip the dependency install step
 ./scripts/run.sh --deps-only              # install deps and exit
 ./scripts/run.sh --enable-nginx-auth      # also enable nginx basic auth
@@ -68,7 +74,8 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ./scripts/run.sh --watchtower             # also start the Watchtower self-updater
 ```
 
-Defaults: port **3001**, bind **127.0.0.1**, shared-memory **on**, nginx auth **off**.
+Defaults: port **3001**, bind **127.0.0.1**, **local memory on**, shared-memory
+MCP **off**, nginx auth **off**.
 
 ### Dependencies
 
@@ -96,9 +103,9 @@ To install dependencies without starting FreeLLMAPI:
 
 ## Local-only mode
 
-Use the gateway directly — no Claude login, no server-side memory. This is the
-option if you want the FreeLLMAPI proxy without wiring up Claude Code or the
-shared-memory MCP server.
+Use the gateway directly — no Claude login, no memory. This is the option if
+you want the FreeLLMAPI proxy without wiring up Claude Code or any memory
+system.
 
 ```bash
 ./scripts/run.sh --quick --local-only
@@ -106,7 +113,34 @@ shared-memory MCP server.
 
 This is equivalent to `--skip-claude --no-memory` in one flag. It still installs
 FreeLLMAPI and starts nginx; it just skips writing `~/.claude/settings.json`
-and the memory MCP server.
+and any memory server.
+
+## Memory
+
+Memory is **local by default** — nothing is sent to Anthropic or any server.
+
+Claude Code's built-in memory system is used:
+
+- **Auto memory** — Claude writes its own learnings and preferences to
+  `~/.claude/projects/<repo>/memory/` at the end of each session.
+- **`CLAUDE.md`** — your project and user instruction files, loaded at the
+  start of every session.
+
+Both live on your machine and never leave it. The gateway's own per-user
+request history is also disabled (`REQUEST_ANALYTICS_RETENTION_DAYS=0`,
+`REQUEST_ANALYTICS_MAX_ROWS=0` in `.env`).
+
+### Shared-memory MCP (opt-in)
+
+If you do want cross-session memory backed by the shared-memory MCP server,
+enable it explicitly:
+
+```bash
+./scripts/run.sh --quick --shared-memory
+```
+
+This wires up the MCP server at `~/.claude/mem/` with SessionStart/SessionEnd
+hooks. It is off by default.
 
 ### Use the gateway from any client
 
@@ -356,8 +390,8 @@ restore them after an update:
 | `compose/docker-compose.yml` | freellmapi + nginx + optional watchtower |
 | `nginx/nginx.conf.template` | Template rendered into `nginx.conf` at setup time |
 | `nginx/nginx.conf` | Rendered reverse-proxy config (generated, not edited by hand) |
-| `templates/settings.json` | Claude Code settings with shared-memory MCP + hooks |
-| `templates/settings-no-memory.json` | Same, without the shared-memory MCP server |
+| `templates/settings.json` | Claude Code settings with shared-memory MCP + hooks (opt-in) |
+| `templates/settings-local-memory.json` | Claude Code settings with local memory only (default) |
 
 ## Security
 

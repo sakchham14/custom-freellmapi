@@ -14,8 +14,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
 
 # --- Defaults -------------------------------------------------------------
+# Memory defaults to LOCAL: Claude Code's built-in auto memory + CLAUDE.md,
+# which is machine-local and never leaves this computer. Opt into the
+# shared-memory MCP server with --shared-memory.
 QUICK=0
-USE_MEMORY=1
+USE_SHARED_MEMORY=0
 ENABLE_NGINX_AUTH=0
 SKIP_CLAUDE=0
 SKIP_NGINX=0
@@ -28,32 +31,36 @@ Usage: $0 [options]
 
 Options:
   --quick                 Accept all defaults without prompting.
-  --no-memory             Do not wire up the shared-memory MCP server.
+  --shared-memory         Also wire up the shared-memory MCP server
+                          (opt-in; local memory is the default).
+  --no-memory             Skip memory entirely (no MCP server, no local
+                          auto memory settings).
   --enable-nginx-auth     Protect the proxy with HTTP Basic Auth.
   --skip-nginx            Do not start the nginx reverse proxy.
   --skip-claude           Do not write Claude Code settings.
   --watchtower            Also start the Watchtower self-updater.
-  --local-only            Skip Claude Code settings AND the shared-memory
-                          MCP server. Use the local gateway instead of
-                          Claude login and server-side memory.
+  --local-only            Skip Claude Code settings AND memory. Use the
+                          local gateway instead of Claude login.
   --no-deps               Skip the dependency install step (use if you
                           already have docker, openssl, jq, node, curl).
   --deps-only             Install dependencies and exit. Don't start
                           FreeLLMAPI or write Claude Code settings.
   -h, --help              Show this help.
 
-Defaults: port 3001, bind 127.0.0.1, memory ON, nginx auth OFF.
+Defaults: port 3001, bind 127.0.0.1, local memory ON, shared-memory MCP
+OFF, nginx auth OFF.
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --quick) QUICK=1 ;;
-    --no-memory) USE_MEMORY=0 ;;
+    --shared-memory) USE_SHARED_MEMORY=1 ;;
+    --no-memory) USE_SHARED_MEMORY=0 ;;
     --enable-nginx-auth) ENABLE_NGINX_AUTH=1 ;;
     --skip-nginx) SKIP_NGINX=1 ;;
     --skip-claude) SKIP_CLAUDE=1 ;;
-    --local-only) USE_MEMORY=0; SKIP_CLAUDE=1 ;;
+    --local-only) USE_SHARED_MEMORY=0; SKIP_CLAUDE=1 ;;
     --no-deps) INSTALL_DEPS=0 ;;
     --deps-only) INSTALL_DEPS=1; SKIP_NGINX=1; SKIP_CLAUDE=1 ;;
     --watchtower) RUN_WATCHTOWER=1 ;;
@@ -69,14 +76,17 @@ if [ "$QUICK" = "0" ]; then
   FREELLMAPI_HOST="${_bind:-127.0.0.1}"
   read -r -p "Port [3001]: " _port
   FREELLMAPI_PORT="${_port:-3001}"
-  read -r -p "Local-only mode (no Claude login, no server-side memory)? [y/N]: " _local
+  read -r -p "Local-only mode (no Claude login, no memory)? [y/N]: " _local
   case "${_local:-N}" in
-    [yY]) USE_MEMORY=0; SKIP_CLAUDE=1 ;;
-    *)     USE_MEMORY=1; SKIP_CLAUDE=0 ;;
+    [yY]) USE_SHARED_MEMORY=0; SKIP_CLAUDE=1 ;;
+    *)     SKIP_CLAUDE=0 ;;
   esac
-  if [ "$USE_MEMORY" = "1" ]; then
-    read -r -p "Enable shared-memory MCP for Claude Code? [Y/n]: " _mem
-    case "${_mem:-Y}" in [nN]*) USE_MEMORY=0 ;; *) USE_MEMORY=1 ;; esac
+  if [ "$SKIP_CLAUDE" = "0" ]; then
+    read -r -p "Use local Claude memory (default) or shared-memory MCP? [L/s]: " _mem
+    case "${_mem:-L}" in
+      [sS]*) USE_SHARED_MEMORY=1 ;;
+      *)     USE_SHARED_MEMORY=0 ;;
+    esac
   fi
   read -r -p "Enable nginx basic auth? [y/N]: " _auth
   case "${_auth:-N}" in [yY]*) ENABLE_NGINX_AUTH=1 ;; *) ENABLE_NGINX_AUTH=0 ;; esac
@@ -86,7 +96,7 @@ fi
 # interactive bind address actually reaches the compose file.
 export HOST_BIND="${FREELLMAPI_HOST:-127.0.0.1}"
 export FREELLMAPI_PORT
-export USE_MEMORY ENABLE_NGINX_AUTH
+export USE_SHARED_MEMORY ENABLE_NGINX_AUTH
 
 # --- 0. Install dependencies ----------------------------------------------
 # Docker, Docker Compose, OpenSSL, jq, node, curl. The upstream FreeLLMAPI

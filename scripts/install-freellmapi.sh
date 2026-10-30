@@ -23,6 +23,16 @@ else
   ok ".env already exists; preserving it"
 fi
 
+# The gateway stores per-user request history in its own SQLite. Memory is
+# local-only by default, so disable that history here (and again in the
+# reapply step, since the upstream image resets env-derived settings on pull).
+if ! grep -q '^REQUEST_ANALYTICS_RETENTION_DAYS=' "$ENV_FILE"; then
+  printf 'REQUEST_ANALYTICS_RETENTION_DAYS=0\nREQUEST_ANALYTICS_MAX_ROWS=0\n' >> "$ENV_FILE"
+  ok "gateway request analytics disabled"
+else
+  ok "gateway analytics already configured in .env"
+fi
+
 # Our compose file is the one that ships in this repo. Never overwrite it.
 if [ ! -f "$COMPOSE_FILE" ]; then
   err "Compose file missing at $COMPOSE_FILE"
