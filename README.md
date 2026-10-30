@@ -12,6 +12,7 @@ already turned on.
 
 | Step | What happens |
 |---|---|
+| 0. Dependencies | Installs Docker, Docker Compose, OpenSSL, jq, node, curl (macOS: Homebrew, Linux/WSL: apt). Idempotent — skips what's already there |
 | 1. Install | Pulls `ghcr.io/tashfeenahmed/freellmapi:latest`, generates an encryption key + `.env`, starts the container |
 | 2. nginx | Renders `nginx.conf` from the template (optional Basic Auth), starts the proxy on host port **80** → freellmapi:3001 |
 | 3. Claude Code | Reads the unified API key straight from the FreeLLMAPI settings table and writes `~/.claude/settings.json` — `ANTHROPIC_BASE_URL=http://localhost:80/v1`, `ANTHROPIC_AUTH_TOKEN=<key>`, auto-compact + gateway model discovery on |
@@ -59,6 +60,8 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ./scripts/run.sh --quick                  # all defaults, no prompts
 ./scripts/run.sh --quick --no-memory      # skip the shared-memory MCP server
 ./scripts/run.sh --quick --local-only     # skip Claude login AND server-side memory
+./scripts/run.sh --quick --no-deps         # skip the dependency install step
+./scripts/run.sh --deps-only              # install deps and exit
 ./scripts/run.sh --enable-nginx-auth      # also enable nginx basic auth
 ./scripts/run.sh --skip-nginx             # skip nginx (proxy runs directly on port 3001)
 ./scripts/run.sh --skip-claude            # don't write Claude Code settings
@@ -66,6 +69,30 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ```
 
 Defaults: port **3001**, bind **127.0.0.1**, shared-memory **on**, nginx auth **off**.
+
+### Dependencies
+
+The bootstrap installs its own dependencies on the first run — Docker, Docker
+Compose, OpenSSL, jq, node, curl. This matches the upstream FreeLLMAPI Docker
+guide (Docker + Compose + OpenSSL) plus the tools the wrapper scripts call.
+
+| Platform | Installs via |
+|---|---|
+| macOS | Homebrew (`brew install` / `brew install --cask docker`) |
+| Linux / WSL | `apt-get` (Ubuntu's `docker.io`, `nodejs`, etc.) |
+
+It's **idempotent** — already-installed packages are skipped, so re-running the
+bootstrap is cheap. To skip it entirely:
+
+```bash
+./scripts/run.sh --quick --no-deps
+```
+
+To install dependencies without starting FreeLLMAPI:
+
+```bash
+./scripts/run.sh --deps-only
+```
 
 ## Local-only mode
 

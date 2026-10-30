@@ -20,6 +20,7 @@ ENABLE_NGINX_AUTH=0
 SKIP_CLAUDE=0
 SKIP_NGINX=0
 RUN_WATCHTOWER=0
+INSTALL_DEPS=1
 
 usage() {
   cat <<EOF
@@ -35,6 +36,10 @@ Options:
   --local-only            Skip Claude Code settings AND the shared-memory
                           MCP server. Use the local gateway instead of
                           Claude login and server-side memory.
+  --no-deps               Skip the dependency install step (use if you
+                          already have docker, openssl, jq, node, curl).
+  --deps-only             Install dependencies and exit. Don't start
+                          FreeLLMAPI or write Claude Code settings.
   -h, --help              Show this help.
 
 Defaults: port 3001, bind 127.0.0.1, memory ON, nginx auth OFF.
@@ -49,6 +54,8 @@ while [ "$#" -gt 0 ]; do
     --skip-nginx) SKIP_NGINX=1 ;;
     --skip-claude) SKIP_CLAUDE=1 ;;
     --local-only) USE_MEMORY=0; SKIP_CLAUDE=1 ;;
+    --no-deps) INSTALL_DEPS=0 ;;
+    --deps-only) INSTALL_DEPS=1; SKIP_NGINX=1; SKIP_CLAUDE=1 ;;
     --watchtower) RUN_WATCHTOWER=1 ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
@@ -80,6 +87,23 @@ fi
 export HOST_BIND="${FREELLMAPI_HOST:-127.0.0.1}"
 export FREELLMAPI_PORT
 export USE_MEMORY ENABLE_NGINX_AUTH
+
+# --- 0. Install dependencies ----------------------------------------------
+# Docker, Docker Compose, OpenSSL, jq, node, curl. The upstream FreeLLMAPI
+# Docker guide lists Docker + Compose + OpenSSL as prerequisites; the wrapper
+# scripts also call jq/node/curl/git. Idempotent — already-installed packages
+# are skipped, so re-running the bootstrap is cheap.
+if [ "$INSTALL_DEPS" = "1" ]; then
+  "$SCRIPT_DIR/install-deps.sh"
+else
+  log "Skipping dependency install (--no-deps)"
+fi
+
+# --deps-only installs dependencies and stops there.
+if [ "${SKIP_NGINX:-0}" = "1" ] && [ "${SKIP_CLAUDE:-0}" = "1" ] && [ "$INSTALL_DEPS" = "1" ]; then
+  ok "Dependencies installed (--deps-only). Nothing else to do."
+  exit 0
+fi
 
 # --- Preconditions --------------------------------------------------------
 require_cmd docker
