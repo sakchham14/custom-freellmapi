@@ -27,6 +27,21 @@ cd custom-freellmapi
 
 That's it. Run `claude` and it routes through the proxy automatically.
 
+### On Windows: double-click `run.bat` instead
+
+Windows doesn't know how to open a `.sh` file, so double-clicking `run.sh` in
+File Explorer spawns a bash that exits immediately — the window opens and
+closes before you can read anything. Use the Windows entry point instead:
+
+```
+double-click:  scripts\run.bat
+from cmd:      scripts\run.bat --quick
+from PowerShell: scripts\run.bat --quick
+```
+
+`run.bat` finds a working bash (WSL, Git Bash, or Cygwin), runs the real
+script, and **keeps the window open on failure** so the error stays visible.
+
 ### Platform notes
 
 The scripts are bash and call `docker compose`, so they need a bash environment
