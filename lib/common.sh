@@ -17,6 +17,17 @@ export FREELLMAPI_ENV_FILE="$ENV_FILE"
 export NGINX_CONF="$REPO_ROOT/nginx/nginx.conf"
 export NGINX_HTPASSWD="${NGINX_HTPASSWD:-/dev/null}"
 
+# --- Portable in-place sed -----------------------------------------------
+# macOS sed needs an explicit backup suffix; GNU sed treats an empty one as
+# "no backup". This helper gives both the same behaviour.
+sed_inplace() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 # --- Logging -------------------------------------------------------------
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '\033[1;32m  ok\033[0m %s\n' "$*"; }

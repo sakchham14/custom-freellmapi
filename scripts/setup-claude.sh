@@ -43,8 +43,18 @@ else
   cp "$REPO_ROOT/templates/settings-no-memory.json" "$SETTINGS_FILE"
 fi
 
-# Substitute the placeholder with the real key.
-sed -i "s/FREELLMAPI_API_KEY_PLACEHOLDER/$UNIFIED_KEY/g" "$SETTINGS_FILE"
+# Substitute the placeholder with the real key. Use | as the delimiter so a key
+# containing slashes doesn't break the substitution.
+sed_inplace "s|FREELLMAPI_API_KEY_PLACEHOLDER|$UNIFIED_KEY|g" "$SETTINGS_FILE"
+
+# Substitute the memory home + node binary placeholders so the hooks and MCP
+# server resolve on the machine actually running the setup (macOS, Linux, WSL).
+if [ "$USE_MEMORY" = "1" ]; then
+  MEM_HOME="$HOME/.claude/mem"
+  NODE_BIN="$(command -v node || echo node)"
+  sed_inplace "s|FREELLMAPI_MEM_HOME_PLACEHOLDER|$MEM_HOME|g" "$SETTINGS_FILE"
+  sed_inplace "s|FREELLMAPI_NODE_BIN_PLACEHOLDER|$NODE_BIN|g" "$SETTINGS_FILE"
+fi
 
 # Point the base URL at nginx (port 80) so traffic goes through the proxy.
 if ! jq -e --arg url "http://localhost:80/v1" \

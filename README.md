@@ -29,13 +29,13 @@ That's it. Run `claude` and it routes through the proxy automatically.
 
 ### Platform notes
 
-The scripts are POSIX-ish bash and use `docker compose`, so they work on
-**macOS, Linux, and WSL**. On Windows, run inside WSL or Git Bash (Docker
-Desktop must be running).
+The scripts are bash and call `docker compose`, so they need a bash environment
+with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 
 - **macOS** — `./scripts/run.sh --quick` works as-is. Homebrew Docker Desktop is the common install.
 - **Linux** — same command; make sure your user is in the `docker` group or use `sudo`.
-- **Windows** — open WSL, clone there, run `./scripts/run.sh --quick`. Native Git Bash works too if Docker Desktop is on and `docker compose` resolves.
+- **Windows 11** — see the dedicated section below. Native Git Bash also works
+  if Docker Desktop is on and `docker compose` resolves, but WSL2 is cleaner.
 
 ## Full options
 
@@ -50,6 +50,82 @@ Desktop must be running).
 ```
 
 Defaults: port **3001**, bind **127.0.0.1**, shared-memory **on**, nginx auth **off**.
+
+## Setting up on Windows 11 (with Docker Desktop)
+
+Recommended path: **WSL2**. The scripts are bash and expect a Unix home
+directory, so running them directly under cmd/PowerShell breaks. WSL2 gives
+you a real bash shell, `docker compose`, and a normal `$HOME` — everything the
+scripts were written for.
+
+### 1. Install prerequisites
+
+- **Windows 11** with the Windows Subsystem for Linux enabled.
+- **Docker Desktop** (latest) — install from docker.com, sign in, and leave it
+  running. Enable **WSL2 backend** in Settings → General → Use the WSL2 based
+  engine.
+- **WSL2** — open PowerShell as Administrator and run:
+
+```powershell
+wsl --install
+```
+
+Then pick a distro (Ubuntu is the default and works fine) and finish the
+setup. Open the Ubuntu terminal, set a username and password when prompted.
+
+### 2. Install Docker CLI inside WSL
+
+Docker Desktop exposes its daemon to WSL automatically, but the `docker`
+command itself needs to be available in the WSL shell:
+
+```bash
+# Ubuntu
+sudo apt update && sudo apt install -y docker.io docker-compose-v2
+```
+
+Verify:
+
+```bash
+docker --version
+docker compose version
+docker run hello-world
+```
+
+If `docker run hello-world` fails with a connection error, open Docker
+Desktop → Settings → General and make sure **"Expose the Docker daemon on
+localhost"** (or the equivalent WSL integration) is enabled.
+
+### 3. Clone and run
+
+```bash
+git clone https://github.com/sakchham14/custom-freellmapi.git
+cd custom-freellmapi
+./scripts/run.sh --quick
+```
+
+That runs the full bootstrap: installs FreeLLMAPI, starts nginx on port 80,
+and writes `~/.claude/settings.json` so `claude` routes through the proxy.
+
+### 4. Run Claude Code
+
+```bash
+npm install -g @anthropic-ai/claude-code
+claude
+```
+
+Claude Code will read `~/.claude/settings.json` and send traffic through
+`http://localhost:80/v1` → nginx → freellmapi.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `docker: command not found` in WSL | Reopen the Ubuntu terminal; Docker Desktop's WSL integration may need a shell restart. Otherwise `sudo apt install docker.io` |
+| `dial tcp 127.0.0.1:3001: connect: connection refused` | Docker Desktop isn't running — start it and wait for the whale icon |
+| `nginx did not come up in time` | Check `docker compose logs nginx`; the freellmapi container must be healthy first |
+| `Could not resolve unified API key` | freellmapi container isn't up or the DB path differs — check `docker compose logs freellmapi` |
+| Proxy works but Claude Code says `connection refused` | Make sure Docker Desktop's port 80 is not blocked by Windows Defender Firewall |
+| `claude` command not found | Install it: `npm install -g @anthropic-ai/claude-code` |
 
 ## Re-applying gateway config
 

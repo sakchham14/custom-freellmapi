@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/mochi/.claude/mem/session-start.js",
+            "command": "node FREELLMAPI_MEM_HOME_PLACEHOLDER/session-start.js",
             "timeout": 5000
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node /Users/mochi/.claude/mem/session-end.js",
+            "command": "node FREELLMAPI_MEM_HOME_PLACEHOLDER/session-end.js",
             "timeout": 5000
           }
         ]
@@ -36,9 +36,9 @@
   "autoCompactEnabled": true,
   "mcpServers": {
     "shared-memory": {
-      "command": "/opt/homebrew/bin/node",
-      "args": ["/Users/mochi/.claude/mem/server.js"],
-      "env": { "MEM_DB_PATH": "/Users/mochi/.claude/mem/db/mem.db" }
+      "command": "FREELLMAPI_NODE_BIN_PLACEHOLDER",
+      "args": ["FREELLMAPI_MEM_HOME_PLACEHOLDER/server.js"],
+      "env": { "MEM_DB_PATH": "FREELLMAPI_MEM_HOME_PLACEHOLDER/db/mem.db" }
     }
   }
 }
