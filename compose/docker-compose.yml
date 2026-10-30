@@ -1,0 +1,73 @@
+# freellmapi-cc-setup: FreeLLMAPI + nginx + Claude Code, one command.
+#
+# This compose file is a thin wrapper around the upstream FreeLLMAPI
+# docker-compose.yml. It adds:
+#   - an nginx reverse proxy on host port 80 -> freellmapi:3001
+#   - optional HTTP Basic Auth on the whole service
+#   - optional Watchtower self-update
+#
+# Everything else (env, data volume, host binding, healthcheck) is the same as
+# upstream so behaviour matches the documented FreeLLMAPI install.
+
+services:
+  freellmapi:
+    image: ghcr.io/tashfeenahmed/freellmapi:latest
+    env_file:
+      - ${FREELLMAPI_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      FREELLMAPI_SELF_UPDATE_URL: http://watchtower:8080
+      FREELLMAPI_SELF_UPDATE_TOKEN: ${WATCHTOWER_TOKEN:-}
+    ports:
+      - "${HOST_BIND:-127.0.0.1}:${FREELLMAPI_PORT:-3001}:3001"
+    volumes:
+      - freellmapi-data:/app/server/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:' + (process.env.PORT || 3001) + '/api/ping').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      freellmapi:
+        condition: service_healthy
+    ports:
+      - "${HOST_BIND:-127.0.0.1}:80:80"
+    volumes:
+      - ${NGINX_CONF:-/nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
+      - ${NGINX_HTPASSWD:-/dev/null}:/etc/nginx/.htpasswd:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  watchtower:
+    image: nickfedor/watchtower:1.22.3
+    profiles: ["autoupdate"]
+    environment:
+      WATCHTOWER_HTTP_API_ENDPOINTS: update
+      WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN:-}
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_SCOPE: freellmapi
+      WATCHTOWER_CLEANUP: "true"
+    labels:
+      com.centurylinklabs.watchtower.scope: freellmapi
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  freellmapi-data:
