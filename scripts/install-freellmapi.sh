@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Install FreeLLMAPI (Docker) using the upstream installer, then drop in our
-# compose wrapper so nginx + optional auth + optional watchtower come along.
+# Install FreeLLMAPI (Docker) using the upstream image.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
@@ -39,8 +38,6 @@ if [ ! -f "$COMPOSE_FILE" ]; then
   exit 1
 fi
 
-# Start only freellmapi now — nginx's config is rendered by setup-nginx.sh
-# and its container has nothing to mount until then.
 log "Starting freellmapi ..."
 compose up -d --wait freellmapi
 

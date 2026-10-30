@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Configure Claude Code to route through the nginx proxy.
+# Configure Claude Code to route through the FreeLLMAPI gateway directly.
 #
 # - Reads the unified API key straight from the FreeLLMAPI settings table
 #   (it is stored in plaintext there) — no secrets in this repo, no
 #   manual copy-paste, no crypto needed.
 # - Writes ~/.claude/settings.json from the template, with:
-#     * ANTHROPIC_BASE_URL pointing at the nginx proxy (port 80)
+#     * ANTHROPIC_BASE_URL pointing at the gateway (port 3001)
 #     * ANTHROPIC_AUTH_TOKEN = the unified key
 #     * autoCompact + gateway model discovery enabled
 #     * shared-memory MCP server + SessionStart/SessionEnd hooks (optional)
@@ -61,8 +61,8 @@ if [ "$USE_SHARED_MEMORY" = "1" ]; then
   sed_inplace "s|FREELLMAPI_NODE_BIN_PLACEHOLDER|$NODE_BIN|g" "$SETTINGS_FILE"
 fi
 
-# Point the base URL at nginx (port 80) so traffic goes through the proxy.
-if ! jq -e --arg url "http://localhost:80/v1" \
+# Point the base URL at the gateway directly (port 3001).
+if ! jq -e --arg url "http://localhost:${FREELLMAPI_PORT:-3001}/v1" \
      '.env.ANTHROPIC_BASE_URL = $url' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp"; then
   err "jq failed to update settings"
   exit 1
@@ -71,7 +71,7 @@ mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
 
 chmod 600 "$SETTINGS_FILE"
 ok "Claude Code settings written to $SETTINGS_FILE"
-log "  ANTHROPIC_BASE_URL = http://localhost:80/v1"
+log "  ANTHROPIC_BASE_URL = http://localhost:${FREELLMAPI_PORT:-3001}/v1"
 if [ "$USE_SHARED_MEMORY" = "1" ]; then
   log "  memory            = shared-memory MCP server"
 else

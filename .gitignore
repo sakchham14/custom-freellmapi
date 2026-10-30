@@ -1,10 +1,6 @@
 # FreeLLMAPI runtime secrets — never commit these
 .env
 .encryption-key
-nginx/.htpasswd
 
 # Claude Code settings (contains the unified API key at runtime)
 ~/.claude/settings.json
-
-# Generated nginx config (rendered from nginx.conf.template at setup time)
-nginx/nginx.conf

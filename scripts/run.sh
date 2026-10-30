@@ -1,29 +1,34 @@
 #!/usr/bin/env bash
-# freellmapi-cc-setup — one-command bootstrap of FreeLLMAPI + nginx + Claude Code.
+# freellmapi-cc-setup — one-command bootstrap of FreeLLMAPI + Claude Code.
+#
+# FreeLLMAPI serves the API and dashboard directly on port 3001, so this is a
+# thin wrapper around the upstream Docker image: it installs deps, starts the
+# container, disables the gateway's per-user request history, and writes
+# ~/.claude/settings.json so `claude` routes through the proxy.
+#
+# Memory is local by default (Claude Code auto memory + CLAUDE.md, machine-local,
+# never leaves this computer). Opt into the shared-memory MCP server with
+# --shared-memory, or disable memory entirely with --no-memory.
 #
 # Usage:
 #   ./scripts/run.sh                       # interactive: prompts for every option
 #   ./scripts/run.sh --quick               # all defaults, no prompts
-#   ./scripts/run.sh --quick --no-memory   # skip the shared-memory MCP setup
-#   ./scripts/run.sh --enable-nginx-auth   # also enable nginx basic auth
-#
-# Every option has a documented default; pass --quick to accept all of them.
+#   ./scripts/run.sh --quick --shared-memory
+#   ./scripts/run.sh --quick --no-memory
+#   ./scripts/run.sh --quick --local-only
+#   ./scripts/run.sh --quick --no-deps
+#   ./scripts/run.sh --deps-only
+#   ./scripts/run.sh --skip-claude
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/../lib/common.sh"
 
 # --- Defaults -------------------------------------------------------------
-# Memory defaults to LOCAL: Claude Code's built-in auto memory + CLAUDE.md,
-# which is machine-local and never leaves this computer. Opt into the
-# shared-memory MCP server with --shared-memory.
 QUICK=0
 USE_SHARED_MEMORY=0
 NO_MEMORY=0
-ENABLE_NGINX_AUTH=0
 SKIP_CLAUDE=0
-SKIP_NGINX=0
-RUN_WATCHTOWER=0
 INSTALL_DEPS=1
 
 usage() {
@@ -36,10 +41,7 @@ Options:
                           (opt-in; local memory is the default).
   --no-memory             Disable memory entirely: no shared-memory MCP
                           server and no local auto memory.
-  --enable-nginx-auth     Protect the proxy with HTTP Basic Auth.
-  --skip-nginx            Do not start the nginx reverse proxy.
   --skip-claude           Do not write Claude Code settings.
-  --watchtower            Also start the Watchtower self-updater.
   --local-only            Skip Claude Code settings AND memory. Use the
                           local gateway instead of Claude login.
   --no-deps               Skip the dependency install step (use if you
@@ -49,7 +51,7 @@ Options:
   -h, --help              Show this help.
 
 Defaults: port 3001, bind 127.0.0.1, local memory ON, shared-memory MCP
-OFF, nginx auth OFF.
+OFF.
 EOF
 }
 
@@ -58,13 +60,10 @@ while [ "$#" -gt 0 ]; do
     --quick) QUICK=1 ;;
     --shared-memory) USE_SHARED_MEMORY=1 ;;
     --no-memory) USE_SHARED_MEMORY=0; NO_MEMORY=1 ;;
-    --enable-nginx-auth) ENABLE_NGINX_AUTH=1 ;;
-    --skip-nginx) SKIP_NGINX=1 ;;
     --skip-claude) SKIP_CLAUDE=1 ;;
     --local-only) USE_SHARED_MEMORY=0; NO_MEMORY=1; SKIP_CLAUDE=1 ;;
     --no-deps) INSTALL_DEPS=0 ;;
-    --deps-only) INSTALL_DEPS=1; SKIP_NGINX=1; SKIP_CLAUDE=1 ;;
-    --watchtower) RUN_WATCHTOWER=1 ;;
+    --deps-only) INSTALL_DEPS=1; SKIP_CLAUDE=1 ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
   esac
@@ -79,7 +78,7 @@ if [ "$QUICK" = "0" ]; then
   FREELLMAPI_PORT="${_port:-3001}"
   read -r -p "Local-only mode (no Claude login, no memory)? [y/N]: " _local
   case "${_local:-N}" in
-    [yY]) USE_SHARED_MEMORY=0; SKIP_CLAUDE=1 ;;
+    [yY]) SKIP_CLAUDE=1 ;;
     *)     SKIP_CLAUDE=0 ;;
   esac
   if [ "$SKIP_CLAUDE" = "0" ]; then
@@ -89,15 +88,13 @@ if [ "$QUICK" = "0" ]; then
       *)     USE_SHARED_MEMORY=0 ;;
     esac
   fi
-  read -r -p "Enable nginx basic auth? [y/N]: " _auth
-  case "${_auth:-N}" in [yY]*) ENABLE_NGINX_AUTH=1 ;; *) ENABLE_NGINX_AUTH=0 ;; esac
 fi
 
 # Re-derive HOST_BIND from the possibly-prompted FREELLMAPI_HOST so the
 # interactive bind address actually reaches the compose file.
 export HOST_BIND="${FREELLMAPI_HOST:-127.0.0.1}"
 export FREELLMAPI_PORT
-export USE_SHARED_MEMORY NO_MEMORY ENABLE_NGINX_AUTH
+export USE_SHARED_MEMORY NO_MEMORY
 
 # --- 0. Install dependencies ----------------------------------------------
 # Docker, Docker Compose, OpenSSL, jq, node, curl. The upstream FreeLLMAPI
@@ -111,7 +108,7 @@ else
 fi
 
 # --deps-only installs dependencies and stops there.
-if [ "${SKIP_NGINX:-0}" = "1" ] && [ "${SKIP_CLAUDE:-0}" = "1" ] && [ "$INSTALL_DEPS" = "1" ]; then
+if [ "$SKIP_CLAUDE" = "1" ] && [ "$INSTALL_DEPS" = "1" ]; then
   ok "Dependencies installed (--deps-only). Nothing else to do."
   exit 0
 fi
@@ -126,24 +123,7 @@ require_cmd curl
 # --- 1. Install FreeLLMAPI ------------------------------------------------
 "$SCRIPT_DIR/install-freellmapi.sh"
 
-# --- 2. Configure & start nginx -------------------------------------------
-if [ "$SKIP_NGINX" = "0" ]; then
-  "$SCRIPT_DIR/setup-nginx.sh"
-else
-  warn "Skipping nginx (proxy will run directly on port $FREELLMAPI_PORT)"
-fi
-
-# --- 3. Optional Watchtower ------------------------------------------------
-if [ "$RUN_WATCHTOWER" = "1" ]; then
-  if [ -z "${WATCHTOWER_TOKEN:-}" ]; then
-    warn "WATCHTOWER_TOKEN not set; skipping Watchtower"
-  else
-    log "Starting Watchtower self-updater ..."
-    compose --profile autoupdate up -d watchtower
-  fi
-fi
-
-# --- 4. Configure Claude Code ---------------------------------------------
+# --- 2. Configure Claude Code ---------------------------------------------
 if [ "$SKIP_CLAUDE" = "0" ]; then
   "$SCRIPT_DIR/setup-claude.sh"
 else
@@ -154,19 +134,13 @@ fi
 ok "All done."
 echo
 echo "  FreeLLMAPI : http://localhost:${FREELLMAPI_PORT}"
-echo "  Proxy      : http://localhost:80"
-if [ "$SKIP_CLAUDE" = "1" ]; then
-  echo "  Settings   : (not written — local-only mode)"
-else
-  echo "  Settings   : ~/.claude/settings.json"
-fi
+echo "  Settings   : $([ "$SKIP_CLAUDE" = "1" ] && echo '(not written — local-only mode)' || echo ~/.claude/settings.json)"
 echo
 if [ "$SKIP_CLAUDE" = "1" ]; then
   echo "Local-only mode: Claude Code is not configured. Point your client at"
-  echo "http://localhost:80/v1 with any API key (e.g. 'local') to use the"
-  echo "gateway directly, or use ANTHROPIC_BASE_URL=http://localhost:80/v1"
-  echo "in your shell before running 'claude'."
+  echo "http://localhost:${FREELLMAPI_PORT}/v1 with any API key (e.g. 'local')"
+  echo "to use the gateway directly, or set ANTHROPIC_BASE_URL="
+  echo "http://localhost:${FREELLMAPI_PORT}/v1 in your shell before running 'claude'."
 else
-  echo "Run 'claude' to start a session. To reapply gateway config after an"
-  echo "update: ./scripts/reapply-gateway-config.sh"
+  echo "Run 'claude' to start a session."
 fi

@@ -1,13 +1,13 @@
-# freellmapi-cc-setup: FreeLLMAPI + nginx + Claude Code, one command.
+# freellmapi-cc-setup: FreeLLMAPI + Claude Code, one command.
 #
 # This compose file is a thin wrapper around the upstream FreeLLMAPI
 # docker-compose.yml. It adds:
-#   - an nginx reverse proxy on host port 80 -> freellmapi:3001
-#   - optional HTTP Basic Auth on the whole service
 #   - optional Watchtower self-update
 #
 # Everything else (env, data volume, host binding, healthcheck) is the same as
-# upstream so behaviour matches the documented FreeLLMAPI install.
+# upstream so behaviour matches the documented FreeLLMAPI install. FreeLLMAPI
+# serves the API and dashboard directly on port 3001, so no reverse proxy is
+# needed.
 
 services:
   freellmapi:
@@ -35,23 +35,6 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 15s
-      retries: 3
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    depends_on:
-      freellmapi:
-        condition: service_healthy
-    ports:
-      - "${HOST_BIND:-127.0.0.1}:80:80"
-    volumes:
-      - ${NGINX_CONF:-/nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
-      - ${NGINX_HTPASSWD:-/dev/null}:/etc/nginx/.htpasswd:ro
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/healthz"]
-      interval: 30s
-      timeout: 5s
       retries: 3
 
   watchtower:

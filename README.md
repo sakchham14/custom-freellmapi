@@ -1,12 +1,12 @@
 # freellmapi-cc-setup
 
-One-command bootstrap for **FreeLLMAPI + nginx + Claude Code**.
+One-command bootstrap for **FreeLLMAPI + Claude Code**.
 
-This is a thin wrapper around the upstream FreeLLMAPI Docker image. It adds an
-nginx reverse proxy, optional HTTP Basic Auth, optional Watchtower self-updater,
-and a one-shot Claude Code configuration that points at the gateway — so you get
-a working local LLM proxy with token-saving compression and response caching
-already turned on.
+This is a thin wrapper around the upstream FreeLLMAPI Docker image. It installs
+dependencies, starts the container, disables the gateway's per-user request
+history, and writes `~/.claude/settings.json` so `claude` routes through the
+gateway — giving you a working local LLM proxy with token-saving compression
+and response caching already turned on.
 
 **Memory is local by default.** Claude Code's built-in auto memory and `CLAUDE.md`
 files live on your machine and never leave it. The gateway's own per-user request
@@ -18,10 +18,9 @@ history is disabled, and the shared-memory MCP server is opt-in.
 |---|---|
 | 0. Dependencies | Installs Docker, Docker Compose, OpenSSL, jq, node, curl (macOS: Homebrew, Linux/WSL: apt). Idempotent — skips what's already there |
 | 1. Install | Pulls `ghcr.io/tashfeenahmed/freellmapi:latest`, generates an encryption key + `.env`, starts the container |
-| 2. nginx | Renders `nginx.conf` from the template (optional Basic Auth), starts the proxy on host port **80** → freellmapi:3001 |
-| 3. Claude Code | Reads the unified API key straight from the FreeLLMAPI settings table and writes `~/.claude/settings.json` — `ANTHROPIC_BASE_URL=http://localhost:80/v1`, `ANTHROPIC_AUTH_TOKEN=<key>`, auto-compact + gateway model discovery on, **local memory on** |
-| 4. Gateway config | Reapplies compression (`aggressive`, auto-trigger at 32k tokens) + response cache after every start — the upstream image resets these on pull |
-| 5. Analytics | Disables the gateway's per-user request history (`REQUEST_ANALYTICS_RETENTION_DAYS=0`, `REQUEST_ANALYTICS_MAX_ROWS=0`) |
+| 2. Claude Code | Reads the unified API key straight from the FreeLLMAPI settings table and writes `~/.claude/settings.json` — `ANTHROPIC_BASE_URL=http://localhost:3001/v1`, `ANTHROPIC_AUTH_TOKEN=<key>`, auto-compact + gateway model discovery on, **local memory on** |
+| 3. Gateway config | Reapplies compression (`aggressive`, auto-trigger at 32k tokens) + response cache after every start — the upstream image resets these on pull |
+| 4. Analytics | Disables the gateway's per-user request history (`REQUEST_ANALYTICS_RETENTION_DAYS=0`, `REQUEST_ANALYTICS_MAX_ROWS=0`) |
 
 ## Quick start
 
@@ -68,14 +67,11 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ./scripts/run.sh --quick --local-only     # skip Claude login and memory
 ./scripts/run.sh --quick --no-deps         # skip the dependency install step
 ./scripts/run.sh --deps-only              # install deps and exit
-./scripts/run.sh --enable-nginx-auth      # also enable nginx basic auth
-./scripts/run.sh --skip-nginx             # skip nginx (proxy runs directly on port 3001)
 ./scripts/run.sh --skip-claude            # don't write Claude Code settings
-./scripts/run.sh --watchtower             # also start the Watchtower self-updater
 ```
 
 Defaults: port **3001**, bind **127.0.0.1**, **local memory on**, shared-memory
-MCP **off**, nginx auth **off**.
+MCP **off**.
 
 ### Dependencies
 
@@ -112,8 +108,8 @@ system.
 ```
 
 This is equivalent to `--skip-claude --no-memory` in one flag. It still installs
-FreeLLMAPI and starts nginx; it just skips writing `~/.claude/settings.json`
-and any memory server.
+FreeLLMAPI; it just skips writing `~/.claude/settings.json` and any memory
+system.
 
 ## Memory
 
@@ -157,17 +153,17 @@ equivalent when you also skip the Claude Code settings step.
 
 ### Use the gateway from any client
 
-The proxy is at `http://localhost:80/v1`. Point any OpenAI-compatible client at
-it — Claude Code, VS Code, curl, or a script:
+The gateway is at `http://localhost:3001/v1`. Point any OpenAI-compatible client
+at it — Claude Code, VS Code, curl, or a script:
 
 ```bash
 # Claude Code (no settings file written, set the URL in your shell)
-export ANTHROPIC_BASE_URL=http://localhost:80/v1
+export ANTHROPIC_BASE_URL=http://localhost:3001/v1
 export ANTHROPIC_AUTH_TOKEN=local
 claude
 
 # curl
-curl http://localhost:80/v1/models \
+curl http://localhost:3001/v1/models \
   -H "Authorization: Bearer local"
 ```
 
@@ -226,8 +222,8 @@ cd custom-freellmapi
 ./scripts/run.sh --quick
 ```
 
-That runs the full bootstrap: installs FreeLLMAPI, starts nginx on port 80,
-and writes `~/.claude/settings.json` so `claude` routes through the proxy.
+That runs the full bootstrap: installs FreeLLMAPI and writes
+`~/.claude/settings.json` so `claude` routes through the gateway.
 
 ### 4. Run Claude Code
 
@@ -237,7 +233,7 @@ claude
 ```
 
 Claude Code will read `~/.claude/settings.json` and send traffic through
-`http://localhost:80/v1` → nginx → freellmapi.
+`http://localhost:3001/v1` → freellmapi.
 
 ### Troubleshooting
 
@@ -245,9 +241,7 @@ Claude Code will read `~/.claude/settings.json` and send traffic through
 |---|---|
 | `docker: command not found` in WSL | Reopen the Ubuntu terminal; Docker Desktop's WSL integration may need a shell restart. Otherwise `sudo apt install docker.io` |
 | `dial tcp 127.0.0.1:3001: connect: connection refused` | Docker Desktop isn't running — start it and wait for the whale icon |
-| `nginx did not come up in time` | Check `docker compose logs nginx`; the freellmapi container must be healthy first |
 | `Could not resolve unified API key` | freellmapi container isn't up or the DB path differs — check `docker compose logs freellmapi` |
-| Proxy works but Claude Code says `connection refused` | Make sure Docker Desktop's port 80 is not blocked by Windows Defender Firewall |
 | `claude` command not found | Install it: `npm install -g @anthropic-ai/claude-code` |
 
 #### WSL opens and crashes on Windows 11
@@ -319,7 +313,7 @@ Then set the environment variables in your shell profile (`~/.zshrc`,
 `~/.bashrc`, or the WSL equivalent):
 
 ```bash
-export ANTHROPIC_BASE_URL=http://localhost:80/v1
+export ANTHROPIC_BASE_URL=http://localhost:3001/v1
 export ANTHROPIC_AUTH_TOKEN=local
 export ANTHROPIC_MODEL=auto
 ```
@@ -329,14 +323,14 @@ by credential. Reload your shell and run `claude`.
 
 ### Using the gateway without Claude Code
 
-Any OpenAI-compatible client works. The gateway is at `http://localhost:80/v1`:
+Any OpenAI-compatible client works. The gateway is at `http://localhost:3001/v1`:
 
 ```bash
 # List models available through the gateway
-curl http://localhost:80/v1/models -H "Authorization: Bearer local"
+curl http://localhost:3001/v1/models -H "Authorization: Bearer local"
 
 # A chat completion
-curl http://localhost:80/v1/chat/completions \
+curl http://localhost:3001/v1/chat/completions \
   -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"hello"}]}'
@@ -362,13 +356,13 @@ point it at the gateway:
 
 | Setting | Value |
 |---|---|
-| Base URL | `http://localhost:80/v1` |
+| Base URL | `http://localhost:3001/v1` |
 | API Key | `local` |
 | Model | `auto` (gateway picks a free model) |
 
 ```bash
 # If the extension reads from your environment:
-export OPENAI_BASE_URL=http://localhost:80/v1
+export OPENAI_BASE_URL=http://localhost:3001/v1
 export OPENAI_API_KEY=local
 ```
 
@@ -377,7 +371,7 @@ export OPENAI_API_KEY=local
 Install the [Claude Code VS Code extension](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code), then set the same environment variables as the CLI section above:
 
 ```bash
-export ANTHROPIC_BASE_URL=http://localhost:80/v1
+export ANTHROPIC_BASE_URL=http://localhost:3001/v1
 export ANTHROPIC_AUTH_TOKEN=local
 ```
 
@@ -394,27 +388,22 @@ restore them after an update:
 
 | File | Purpose |
 |---|---|
-| `scripts/run.sh` | Entrypoint — parses options, runs the four setup steps |
+| `scripts/run.sh` | Entrypoint — parses options, runs the setup steps |
 | `scripts/install-freellmapi.sh` | Installs FreeLLMAPI via `docker compose`, generates `.env` + encryption key |
-| `scripts/setup-nginx.sh` | Renders `nginx.conf` from the template (optional HTTP Basic Auth), starts the stack |
 | `scripts/setup-claude.sh` | Reads the unified API key from the FreeLLMAPI DB and writes `~/.claude/settings.json` |
 | `scripts/reapply-gateway-config.sh` | Restores compression + response-cache after any image update |
 | `lib/common.sh` | Shared helpers: logging, `compose()` / `compose_exec()`, `wait_http()`, `require_cmd()`, `detect_os()` |
-| `compose/docker-compose.yml` | freellmapi + nginx + optional watchtower |
-| `nginx/nginx.conf.template` | Template rendered into `nginx.conf` at setup time |
-| `nginx/nginx.conf` | Rendered reverse-proxy config (generated, not edited by hand) |
+| `compose/docker-compose.yml` | freellmapi container definition |
 | `templates/settings.json` | Claude Code settings with shared-memory MCP + hooks (opt-in) |
 | `templates/settings-local-memory.json` | Claude Code settings with local memory only (default) |
 | `templates/settings-no-memory.json` | Claude Code settings with memory disabled entirely |
 
 ## Security
 
-- `.env`, `.encryption-key`, `nginx/.htpasswd`, and `~/.claude/settings.json` are **gitignored** — never committed.
+- `.env`, `.encryption-key`, and `~/.claude/settings.json` are **gitignored** — never committed.
 - The unified API key is read from the FreeLLMAPI settings table at runtime. It
   is stored in plaintext there (that's how upstream ships it), but it never
   touches this repo.
-- nginx Basic Auth, when enabled, generates a random password and prints it to
-  the terminal. Save it somewhere safe — it is not stored anywhere else.
 
 ## Requirements
 

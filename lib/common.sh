@@ -14,8 +14,6 @@ export ENV_FILE="$FREELLMAPI_DIR/.env"
 # docker compose resolves env_file paths relative to the compose file's
 # directory, so pass the absolute path explicitly via the host environment.
 export FREELLMAPI_ENV_FILE="$ENV_FILE"
-export NGINX_CONF="$REPO_ROOT/nginx/nginx.conf"
-export NGINX_HTPASSWD="${NGINX_HTPASSWD:-/dev/null}"
 
 # --- Portable in-place sed -----------------------------------------------
 # macOS sed needs an explicit backup suffix; GNU sed treats an empty one as
