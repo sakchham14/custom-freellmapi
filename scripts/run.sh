@@ -34,8 +34,8 @@ Options:
   --quick                 Accept all defaults without prompting.
   --shared-memory         Also wire up the shared-memory MCP server
                           (opt-in; local memory is the default).
-  --no-memory             Skip memory entirely (no MCP server, no local
-                          auto memory settings).
+  --no-memory             Disable memory entirely: no shared-memory MCP
+                          server and no local auto memory.
   --enable-nginx-auth     Protect the proxy with HTTP Basic Auth.
   --skip-nginx            Do not start the nginx reverse proxy.
   --skip-claude           Do not write Claude Code settings.
