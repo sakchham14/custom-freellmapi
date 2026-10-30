@@ -32,6 +32,9 @@ Options:
   --skip-nginx            Do not start the nginx reverse proxy.
   --skip-claude           Do not write Claude Code settings.
   --watchtower            Also start the Watchtower self-updater.
+  --local-only            Skip Claude Code settings AND the shared-memory
+                          MCP server. Use the local gateway instead of
+                          Claude login and server-side memory.
   -h, --help              Show this help.
 
 Defaults: port 3001, bind 127.0.0.1, memory ON, nginx auth OFF.
@@ -45,6 +48,7 @@ while [ "$#" -gt 0 ]; do
     --enable-nginx-auth) ENABLE_NGINX_AUTH=1 ;;
     --skip-nginx) SKIP_NGINX=1 ;;
     --skip-claude) SKIP_CLAUDE=1 ;;
+    --local-only) USE_MEMORY=0; SKIP_CLAUDE=1 ;;
     --watchtower) RUN_WATCHTOWER=1 ;;
     -h|--help) usage; exit 0 ;;
     *) err "Unknown option: $1"; usage; exit 1 ;;
@@ -58,8 +62,15 @@ if [ "$QUICK" = "0" ]; then
   FREELLMAPI_HOST="${_bind:-127.0.0.1}"
   read -r -p "Port [3001]: " _port
   FREELLMAPI_PORT="${_port:-3001}"
-  read -r -p "Enable shared-memory MCP for Claude Code? [Y/n]: " _mem
-  case "${_mem:-Y}" in [nN]*) USE_MEMORY=0 ;; *) USE_MEMORY=1 ;; esac
+  read -r -p "Local-only mode (no Claude login, no server-side memory)? [y/N]: " _local
+  case "${_local:-N}" in
+    [yY]) USE_MEMORY=0; SKIP_CLAUDE=1 ;;
+    *)     USE_MEMORY=1; SKIP_CLAUDE=0 ;;
+  esac
+  if [ "$USE_MEMORY" = "1" ]; then
+    read -r -p "Enable shared-memory MCP for Claude Code? [Y/n]: " _mem
+    case "${_mem:-Y}" in [nN]*) USE_MEMORY=0 ;; *) USE_MEMORY=1 ;; esac
+  fi
   read -r -p "Enable nginx basic auth? [y/N]: " _auth
   case "${_auth:-N}" in [yY]*) ENABLE_NGINX_AUTH=1 ;; *) ENABLE_NGINX_AUTH=0 ;; esac
 fi
@@ -109,7 +120,18 @@ ok "All done."
 echo
 echo "  FreeLLMAPI : http://localhost:${FREELLMAPI_PORT}"
 echo "  Proxy      : http://localhost:80"
-echo "  Settings   : ~/.claude/settings.json"
+if [ "$SKIP_CLAUDE" = "1" ]; then
+  echo "  Settings   : (not written — local-only mode)"
+else
+  echo "  Settings   : ~/.claude/settings.json"
+fi
 echo
-echo "Run 'claude' to start a session. To reapply gateway config after an"
-echo "update: ./scripts/reapply-gateway-config.sh"
+if [ "$SKIP_CLAUDE" = "1" ]; then
+  echo "Local-only mode: Claude Code is not configured. Point your client at"
+  echo "http://localhost:80/v1 with any API key (e.g. 'local') to use the"
+  echo "gateway directly, or use ANTHROPIC_BASE_URL=http://localhost:80/v1"
+  echo "in your shell before running 'claude'."
+else
+  echo "Run 'claude' to start a session. To reapply gateway config after an"
+  echo "update: ./scripts/reapply-gateway-config.sh"
+fi

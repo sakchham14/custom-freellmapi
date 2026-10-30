@@ -43,6 +43,7 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ./scripts/run.sh                          # interactive: prompts for every option
 ./scripts/run.sh --quick                  # all defaults, no prompts
 ./scripts/run.sh --quick --no-memory      # skip the shared-memory MCP server
+./scripts/run.sh --quick --local-only     # skip Claude login AND server-side memory
 ./scripts/run.sh --enable-nginx-auth      # also enable nginx basic auth
 ./scripts/run.sh --skip-nginx             # skip nginx (proxy runs directly on port 3001)
 ./scripts/run.sh --skip-claude            # don't write Claude Code settings
@@ -50,6 +51,39 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ```
 
 Defaults: port **3001**, bind **127.0.0.1**, shared-memory **on**, nginx auth **off**.
+
+## Local-only mode
+
+Use the gateway directly — no Claude login, no server-side memory. This is the
+option if you want the FreeLLMAPI proxy without wiring up Claude Code or the
+shared-memory MCP server.
+
+```bash
+./scripts/run.sh --quick --local-only
+```
+
+This is equivalent to `--skip-claude --no-memory` in one flag. It still installs
+FreeLLMAPI and starts nginx; it just skips writing `~/.claude/settings.json`
+and the memory MCP server.
+
+### Use the gateway from any client
+
+The proxy is at `http://localhost:80/v1`. Point any OpenAI-compatible client at
+it — Claude Code, VS Code, curl, or a script:
+
+```bash
+# Claude Code (no settings file written, set the URL in your shell)
+export ANTHROPIC_BASE_URL=http://localhost:80/v1
+export ANTHROPIC_AUTH_TOKEN=local
+claude
+
+# curl
+curl http://localhost:80/v1/models \
+  -H "Authorization: Bearer local"
+```
+
+The gateway accepts **any** API key — it routes by model name, not by
+credential, so `local` works everywhere.
 
 ## Setting up on Windows 11 (with Docker Desktop)
 
@@ -126,6 +160,86 @@ Claude Code will read `~/.claude/settings.json` and send traffic through
 | `Could not resolve unified API key` | freellmapi container isn't up or the DB path differs — check `docker compose logs freellmapi` |
 | Proxy works but Claude Code says `connection refused` | Make sure Docker Desktop's port 80 is not blocked by Windows Defender Firewall |
 | `claude` command not found | Install it: `npm install -g @anthropic-ai/claude-code` |
+
+## Setting up Claude Code (CLI)
+
+If you ran the full bootstrap (no `--local-only`), Claude Code is already
+configured — just run `claude`.
+
+### Manual setup
+
+If you skipped Claude Code during setup, or want to point an existing install at
+the gateway:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+Then set the environment variables in your shell profile (`~/.zshrc`,
+`~/.bashrc`, or the WSL equivalent):
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:80/v1
+export ANTHROPIC_AUTH_TOKEN=local
+export ANTHROPIC_MODEL=auto
+```
+
+`ANTHROPIC_AUTH_TOKEN=local` works because the gateway routes by model name, not
+by credential. Reload your shell and run `claude`.
+
+### Using the gateway without Claude Code
+
+Any OpenAI-compatible client works. The gateway is at `http://localhost:80/v1`:
+
+```bash
+# List models available through the gateway
+curl http://localhost:80/v1/models -H "Authorization: Bearer local"
+
+# A chat completion
+curl http://localhost:80/v1/chat/completions \
+  -H "Authorization: Bearer local" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"hello"}]}'
+```
+
+## Setting up VS Code
+
+The gateway is an OpenAI-compatible endpoint, so the [GitHub Copilot
+extension](https://marketplace.visualstudio.com/items?itemName=github.copilot)
+or any extension that lets you set a custom base URL works. Two common paths:
+
+### Option A: GitHub Copilot (with a Copilot subscription)
+
+Install the Copilot extension, sign in, and it routes through GitHub's own
+infrastructure — it will **not** use your local gateway. Use this if you want
+Copilot's models.
+
+### Option B: Custom OpenAI-compatible provider
+
+If your extension supports a custom base URL (e.g. the **Continue** /
+**Claude Code** extension, or **OpenAI** extension with a custom endpoint),
+point it at the gateway:
+
+| Setting | Value |
+|---|---|
+| Base URL | `http://localhost:80/v1` |
+| API Key | `local` |
+| Model | `auto` (gateway picks a free model) |
+
+```bash
+# If the extension reads from your environment:
+export OPENAI_BASE_URL=http://localhost:80/v1
+export OPENAI_API_KEY=local
+```
+
+### Option C: Claude Code extension
+
+Install the [Claude Code VS Code extension](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code), then set the same environment variables as the CLI section above:
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:80/v1
+export ANTHROPIC_AUTH_TOKEN=local
+```
 
 ## Re-applying gateway config
 
