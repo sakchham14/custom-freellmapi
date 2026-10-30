@@ -17,6 +17,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 # Memory defaults to LOCAL (Claude Code's built-in auto memory + CLAUDE.md).
 # The shared-memory MCP server is opt-in via --shared-memory.
 USE_SHARED_MEMORY="${USE_SHARED_MEMORY:-0}"
+NO_MEMORY="${NO_MEMORY:-0}"
 
 # --- Resolve the unified API key from the FreeLLMAPI DB -------------------
 log "Resolving unified API key from FreeLLMAPI ..."
@@ -41,6 +42,8 @@ mkdir -p "$SETTINGS_DIR"
 
 if [ "$USE_SHARED_MEMORY" = "1" ]; then
   cp "$REPO_ROOT/templates/settings.json" "$SETTINGS_FILE"
+elif [ "$NO_MEMORY" = "1" ]; then
+  cp "$REPO_ROOT/templates/settings-no-memory.json" "$SETTINGS_FILE"
 else
   cp "$REPO_ROOT/templates/settings-local-memory.json" "$SETTINGS_FILE"
 fi

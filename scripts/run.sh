@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 # shared-memory MCP server with --shared-memory.
 QUICK=0
 USE_SHARED_MEMORY=0
+NO_MEMORY=0
 ENABLE_NGINX_AUTH=0
 SKIP_CLAUDE=0
 SKIP_NGINX=0
@@ -56,11 +57,11 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --quick) QUICK=1 ;;
     --shared-memory) USE_SHARED_MEMORY=1 ;;
-    --no-memory) USE_SHARED_MEMORY=0 ;;
+    --no-memory) USE_SHARED_MEMORY=0; NO_MEMORY=1 ;;
     --enable-nginx-auth) ENABLE_NGINX_AUTH=1 ;;
     --skip-nginx) SKIP_NGINX=1 ;;
     --skip-claude) SKIP_CLAUDE=1 ;;
-    --local-only) USE_SHARED_MEMORY=0; SKIP_CLAUDE=1 ;;
+    --local-only) USE_SHARED_MEMORY=0; NO_MEMORY=1; SKIP_CLAUDE=1 ;;
     --no-deps) INSTALL_DEPS=0 ;;
     --deps-only) INSTALL_DEPS=1; SKIP_NGINX=1; SKIP_CLAUDE=1 ;;
     --watchtower) RUN_WATCHTOWER=1 ;;
@@ -96,7 +97,7 @@ fi
 # interactive bind address actually reaches the compose file.
 export HOST_BIND="${FREELLMAPI_HOST:-127.0.0.1}"
 export FREELLMAPI_PORT
-export USE_SHARED_MEMORY ENABLE_NGINX_AUTH
+export USE_SHARED_MEMORY NO_MEMORY ENABLE_NGINX_AUTH
 
 # --- 0. Install dependencies ----------------------------------------------
 # Docker, Docker Compose, OpenSSL, jq, node, curl. The upstream FreeLLMAPI

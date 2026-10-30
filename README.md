@@ -64,7 +64,7 @@ with Docker Desktop running. **WSL2 is the recommended path on Windows.**
 ./scripts/run.sh                          # interactive: prompts for every option
 ./scripts/run.sh --quick                  # all defaults, no prompts
 ./scripts/run.sh --quick --shared-memory  # also wire up the shared-memory MCP server
-./scripts/run.sh --quick --no-memory      # disable the shared-memory MCP server (default)
+./scripts/run.sh --quick --no-memory      # disable memory entirely (no MCP, no local auto memory)
 ./scripts/run.sh --quick --local-only     # skip Claude login and memory
 ./scripts/run.sh --quick --no-deps         # skip the dependency install step
 ./scripts/run.sh --deps-only              # install deps and exit
@@ -141,6 +141,19 @@ enable it explicitly:
 
 This wires up the MCP server at `~/.claude/mem/` with SessionStart/SessionEnd
 hooks. It is off by default.
+
+### No memory
+
+To run Claude Code with no memory at all — no shared-memory MCP server and no
+local auto memory:
+
+```bash
+./scripts/run.sh --quick --no-memory
+```
+
+This writes `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` into `~/.claude/settings.json`,
+so Claude neither reads nor writes any memory files. `--local-only` is the
+equivalent when you also skip the Claude Code settings step.
 
 ### Use the gateway from any client
 
@@ -392,6 +405,7 @@ restore them after an update:
 | `nginx/nginx.conf` | Rendered reverse-proxy config (generated, not edited by hand) |
 | `templates/settings.json` | Claude Code settings with shared-memory MCP + hooks (opt-in) |
 | `templates/settings-local-memory.json` | Claude Code settings with local memory only (default) |
+| `templates/settings-no-memory.json` | Claude Code settings with memory disabled entirely |
 
 ## Security
 
