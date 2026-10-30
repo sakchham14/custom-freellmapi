@@ -161,6 +161,57 @@ Claude Code will read `~/.claude/settings.json` and send traffic through
 | Proxy works but Claude Code says `connection refused` | Make sure Docker Desktop's port 80 is not blocked by Windows Defender Firewall |
 | `claude` command not found | Install it: `npm install -g @anthropic-ai/claude-code` |
 
+#### WSL opens and crashes on Windows 11
+
+WSL crashing on launch is usually one of four things. Run each in an
+**elevated PowerShell** (`Shift+Ctrl+right-click Start → Windows Terminal (Admin)`):
+
+**1. WSL isn't initialized yet.** A fresh install needs a first-run step:
+
+```powershell
+wsl --set-default-version 2
+wsl --set-default-directory \\wsl$\localhost\Ubuntu
+wsl
+```
+
+The last command opens Ubuntu and asks for a username/password — set both,
+then close it.
+
+**2. The WSL2 kernel is out of date.** Windows 11 22H2 or earlier needs the
+kernel update package:
+
+```powershell
+wsl --update
+```
+
+Restart after it finishes. If `wsl --update` fails, download the kernel MSI
+from https://github.com/microsoft/wsl2-kernel/releases.
+
+**3. The Linux distro is broken or in a bad state.** WSL keeps a tar backup of
+each distro. Reset and reinstall:
+
+```powershell
+wsl --list --verbose
+wsl --unregister Ubuntu
+wsl --install --distribution Ubuntu
+```
+
+**4. Required Windows features are missing.** WSL2 needs Hyper-V and the
+Windows Subsystem for Linux optional feature. Enable them and reboot:
+
+```powershell
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+wsl --set-default-version 2
+```
+
+Then reboot the machine. If you're on Windows 11 Home (no Hyper-V), WSL2
+falls back to a lightweight VM — that still works, but make sure
+**Virtualization is enabled in BIOS** (often called Intel VT-x / AMD-V).
+
+If WSL opens but immediately exits with an error, run `wsl --status` in
+PowerShell — it usually tells you which of the above is the problem.
+
 ## Setting up Claude Code (CLI)
 
 If you ran the full bootstrap (no `--local-only`), Claude Code is already
